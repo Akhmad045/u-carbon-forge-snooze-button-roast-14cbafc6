@@ -27,6 +27,7 @@ leading or trailing white space).
 ```sh
 python3 main.py                 # prints the line, writes /output/entry.txt
 python3 main.py --self-test     # validates the entry against the gate
+python3 main.py --verify        # runs the entry twice and compares outputs
 ```
 
 ## Referral

@@ -7,7 +7,7 @@ must pass the gate: UTF-8 text of 1 to 200 characters, not only white
 space, a single line.
 
 Usage:
-    python3 main.py [--output PATH] [--self-test]
+    python3 main.py [--output PATH] [--self-test] [--verify]
 """
 
 import argparse
@@ -69,6 +69,52 @@ def write_entry(path):
     return 0
 
 
+def verify():
+    """Run the entry program twice (plain and optimized) and check
+    both runs write the same bytes and print the same line.
+
+    The grader runs the program more than once, so the two runs must
+    agree exactly; a program that prints a different line on the
+    second run would fail the gate on one of them.
+    """
+    import subprocess
+    import tempfile
+    gate_problems = validate(ENTRY)
+    if gate_problems:
+        for problem in gate_problems:
+            print("verify FAIL: %s" % problem, file=sys.stderr)
+        return 1
+    verify_runs = []
+    with tempfile.TemporaryDirectory() as verify_tmp:
+        for verify_label, verify_extra in (
+                ("plain", []), ("optimized", ["-O"])):
+            verify_target = os.path.join(
+                verify_tmp, "entry-%s.txt" % verify_label)
+            verify_cmd = [sys.executable, *verify_extra,
+                          os.path.abspath(__file__),
+                          "--output", verify_target]
+            verify_proc = subprocess.run(
+                verify_cmd, capture_output=True, text=True)
+            if verify_proc.returncode != 0:
+                print("verify FAIL: %s run exited %d: %s"
+                      % (verify_label, verify_proc.returncode,
+                         verify_proc.stderr.strip()), file=sys.stderr)
+                return 1
+            with open(verify_target, "rb") as verify_handle:
+                verify_runs.append(verify_handle.read())
+            if verify_proc.stdout.rstrip("\n") != ENTRY:
+                print("verify FAIL: %s run printed a different line"
+                      % verify_label, file=sys.stderr)
+                return 1
+    if verify_runs[0] != verify_runs[1]:
+        print("verify FAIL: plain and optimized runs differ",
+              file=sys.stderr)
+        return 1
+    print("verify OK: %d chars, %d bytes, identical across runs"
+          % (len(ENTRY), len(ENTRY.encode("utf-8"))))
+    return 0
+
+
 def self_test():
     """Validate the entry text and a round-trip write/read."""
     problems = validate(ENTRY)
@@ -100,7 +146,11 @@ def main(argv=None):
                         help="where to write the entry (default: %(default)s)")
     parser.add_argument("--self-test", action="store_true",
                         help="validate the entry against the gate and exit")
+    parser.add_argument("--verify", action="store_true",
+                        help="run the entry twice and compare the outputs")
     args = parser.parse_args(argv)
+    if args.verify:
+        return verify()
     if args.self_test:
         return self_test()
     return write_entry(args.output)
